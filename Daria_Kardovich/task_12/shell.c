@@ -53,10 +53,44 @@ int main(int argc, char *argv[])
             continue; // Возвращаемся к следующему приглашению
         }
 
-#ifdef DEBUG // Этот код работает только при сборке с флагом -DDEBUG
-        print_parsed_commands(ncmds); // Выводим разобранные команды и специальные символы
+#ifdef DEBUG
+        print_parsed_commands(ncmds);
 #endif
-    } 
 
-    return 0; 
-} 
+        for (int i = 0; i < ncmds; i++) { // Добавлено в задании 13 для запуска каждой команды
+            pid_t pid; // Хранит номер дочернего процесса
+            int status; // Хранит статус завершения дочернего процесса
+
+            pid = fork(); // Создаёт дочерний процесс
+
+            if (pid == -1) { // Проверяет ошибку создания процесса
+                perror("fork"); // Печатает причину ошибки fork
+                continue; // Переходит к следующей команде
+            }
+
+            if (pid == 0) { // Этот блок выполняется только в дочернем процессе
+                execvp(cmds[i].cmdargs[0], cmds[i].cmdargs); // Запускает введённую команду
+
+                perror(cmds[i].cmdargs[0]); // Печатает ошибку если команда не найдена
+                _exit(127); // Завершает потомка с кодом ошибки 127
+            }
+
+            if (waitpid(pid, &status, 0) == -1) { // Родительский shell ждёт завершения потомка
+                perror("waitpid"); // Печатает причину ошибки ожидания
+                continue; // Переходит к следующей команде
+            }
+
+            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) { // Проверяет завершение команды с ненулевым кодом
+                fprintf(stderr, "Command exited with status %d\n",
+                        WEXITSTATUS(status)); // Печатает код завершения команды
+            }
+
+            if (WIFSIGNALED(status)) { // Проверяет завершение команды из-за сигнала
+                fprintf(stderr, "Command terminated by signal %d\n",
+                        WTERMSIG(status)); // Печатает номер сигнала
+            }
+        }
+    }
+
+    return 0;
+}
